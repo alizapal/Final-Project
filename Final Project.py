@@ -12,15 +12,8 @@ import json
 moviedb_apikey = Secrets.moviedb_apikey
 watchmode_apikey = Secrets.watchmode_apikey
 
-# functions
-# open cache# save cache 
-# create unigue key
-# call api ?
-# call api with cache ?
-# open cache dict
 
-
-CACHE_FILENAME = "Caching_Up.json"
+CACHE_FILENAME = "Caching_It_Up.json"
 
 def open_cache():
     ''' opens the cache file if it exists and loads the JSON into
@@ -55,7 +48,7 @@ def save_cache(cache_dict):
     -------
     None
     '''
-    dumped_json_cache = json.dumps(cache_dict)
+    dumped_json_cache = json.dumps(cache_dict, indent=4, sort_keys=True)
     fw = open(CACHE_FILENAME,"w")
     fw.write(dumped_json_cache)
     fw.close()
@@ -127,7 +120,7 @@ class Movie:
                 self.page_view = page_view
 
     def info(self):
-        return f"{self.title} ({self.release_date}) {self.genre} \nDescription: {self.plot}\n {self.title_ID}\n" # \n {self.plot}
+        return f"{self.title} ({self.release_date}) {self.genre} \nDescription: {self.plot}\n" # \n {self.plot}
 
     def length(self):
         return 0
@@ -144,18 +137,30 @@ def call_function(params, limit=50):
          limit= 100
     params["limit"] = 100
 
-    
+    cache_dict = open_cache()
+    unique_key = construct_unique_key(base_url, params)
+    try:
+        results = cache_dict[unique_key] #
+    except:
+        response = requests.get(base_url, params)
+        json_str = response.text
+        results = jsonpkg.loads(json_str)
 
-    response = requests.get(base_url, params)
-    json_str = response.text
-    results = jsonpkg.loads(json_str)
-
-    return results
+    # return results, str(base_url + params)
+    return results, unique_key, cache_dict # unique key being stored as info2 below
 
 
-moviedb_params = {"api_key": moviedb_apikey, "language": "en-US", "include_adult": "false", "query": "Attack"}
-info = call_function(moviedb_params)
-# print(info["results"][0])
+# moviedb_params = {"api_key": moviedb_apikey, "language": "en-US", "include_adult": "false", "query": "Attack"}
+# info, info2, info3 = call_function(moviedb_params) #info2 will be the key for the cache
+# # print(info["results"][0])
+
+# # Add to the cache_dict given the unique with the results as the value (key, value pair)
+# info3[info2] = info
+# save_cache(info3) #can just call it
+
+def update_cache(results, unique_key, cache_dict): #Does what line 166 does, to return updated dictionary
+    cache_dict[unique_key] = results # cache_dict has been updated to include the new unique key and results
+    save_cache(cache_dict)
 
 
 # Pull numbers to ID genres
@@ -168,6 +173,7 @@ genre_response = requests.get(genre_url, genre_params)
 genre_str = genre_response.text
 genre_results = jsonpkg.loads(genre_str)
 # print(genre_results["genres"])
+# print(genre_results)
 
 
 # CACHING TEST
@@ -197,7 +203,7 @@ def organize_results(results):
     return list_of_objects
 
 # Call and test organize results function
-test_results = organize_results(info)
+# test_results = organize_results(info)
 # print(test_results)
 # print(total_pages_number)
 
@@ -226,22 +232,27 @@ def format_results(list_of_objects):
 
 ###### NOW PREPARE WATCHMODE API TO VIEW STREAMING AVAILABILITY ######
 
-def call_function_II(params_II, limit=50):
+def call_function_II(params, limit=50):
 
-    base_url_II = 'https://api.watchmode.com/v1/title/{title_id}/sources/'
+    base_url = 'https://api.watchmode.com/v1/title/title_id/sources/'
 
     # ("https://api.watchmode.com/v1/title/345534/sources/?apiKey=YOUR_API_KEY"
 
     if limit > 100:
          limit= 100
 
-    params_II["limit"] = 100
+    params["limit"] = 100
 
-    response_II = requests.get(base_url_II, params_II)
-    json_str_II = response_II.text
-    results_II = jsonpkg.loads(json_str_II)
+    cache_dict = open_cache()
+    unique_key = construct_unique_key(base_url, params)
+    try:
+        results = cache_dict[unique_key] #
+    except:
+        response = requests.get(base_url, params)
+        json_str = response.text
+        results = jsonpkg.loads(json_str)
 
-    return results_II
+    return results, unique_key, cache_dict
 
 
 # watchmode_params = {}
@@ -265,6 +276,9 @@ if __name__ == "__main__":
             # Quit
             # View a different page: Code so you can only view another after a term has been searched
 
+            # Can reasonably assume they'll type words. 
+            # Put that in the presentation for it & make sure it's a real word that would be searchable 
+
             if chosen_term.lower() == "exit":
                 print("Bye")
                 break
@@ -283,21 +297,24 @@ if __name__ == "__main__":
                         else:
                             search_dictionary["page"] = chosen_page
                             call_results = call_function(search_dictionary)
-                            org_results = organize_results(call_results)
+                            update_cache(call_results[0], call_results[1], call_results[2])
+                            org_results = organize_results(call_results[0])
                             format_results(org_results)
 
             else:
                 search_dictionary["api_key"] = Secrets.moviedb_apikey
                 search_dictionary["query"] = chosen_term
                 search_dictionary["page"] = 1 # page 1 is the default
-                call_results = call_function(search_dictionary)
+                call_results = call_function(search_dictionary) # call function returns three things
                 # print(call_results)
-                org_results = organize_results(call_results)
+                update_cache(call_results[0], call_results[1], call_results[2])
+                org_results = organize_results(call_results[0])
                 # print(org_results)
                 format_results(org_results)
 
         else:
             call_results = call_function(previous_input)
-            org_results = organize_results(call_results)
+            update_cache(call_results[0], call_results[1], call_results[2])
+            org_results = organize_results(call_results[0])
             format_results(org_results)
             print(previous_input)
